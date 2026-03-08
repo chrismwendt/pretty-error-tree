@@ -47,8 +47,8 @@ type Frame = {
   dbg: any
 }
 
-const parseStack = async (err: Error): Promise<Frame[]> => {
-  const stack = await new StackTracey(err).withSourcesAsync()
+const parseStack = (err: Error): Frame[] => {
+  const stack = new StackTracey(err).withSources()
   return stack.items.map(entry => ({
     file: entry.file,
     line: entry.line ?? 0,
@@ -63,12 +63,12 @@ export const prettyErrorTree = async (err: Error & { parsedStack?: Frame[] }, pr
   return lines.join('\n')
 }
 
-const prettyErrorTreeLines = async (err: Error & { parsedStack?: Frame[] }, prefix?: string): Promise<string[]> => {
-  const stack = err.parsedStack ?? (await parseStack(err))
+const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: string): string[] => {
+  const stack = err.parsedStack ?? parseStack(err)
   const frames = stack.filter(f => !f.file.startsWith('node:'))
 
   // name and message
-  const headerLines = [`${prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message}`]
+  const headerLines = [`${prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]
 
   // props
   const known = new Set(['name', 'message', 'stack', 'cause', 'errors', 'parsedStack'])
@@ -82,10 +82,9 @@ const prettyErrorTreeLines = async (err: Error & { parsedStack?: Frame[] }, pref
     hasProps = true
   }
   if (hasProps) {
-    propLines.push(gray('Properties:'))
-    propLines.push(gray(''))
     const inspectLines = util.inspect(propsObj, { colors: true, depth: null, compact: 10 }).split('\n')
-    propLines.push(...inspectLines.map(line => '  ' + line))
+    propLines.push(gray('Properties: ') + inspectLines[0])
+    propLines.push(...inspectLines.slice(1))
   }
 
   // stack trace
@@ -120,7 +119,7 @@ const prettyErrorTreeLines = async (err: Error & { parsedStack?: Frame[] }, pref
     for (let i = 0; i < err.errors.length; i++) {
       const innerErr = err.errors[i]
       aggregateLines.push(red('│'))
-      const inner = await prettyErrorTreeLines(innerErr)
+      const inner = prettyErrorTreeLines(innerErr)
       for (let j = 0; j < inner.length; j++) {
         if (false) continue
         else if (i < err.errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j]
@@ -137,7 +136,7 @@ const prettyErrorTreeLines = async (err: Error & { parsedStack?: Frame[] }, pref
   const causeLines: string[] = []
   if (err.cause instanceof Error) {
     causeLines.push(magenta('│'))
-    const cause = await prettyErrorTreeLines(err.cause, 'Caused by ')
+    const cause = prettyErrorTreeLines(err.cause, 'Caused by ')
     causeLines.push(...cause)
   }
 

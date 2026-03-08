@@ -26,8 +26,8 @@ const gray = (s) => `\x1b[90m${s}\x1b[0m`;
 const red = (s) => `\x1b[31m${s}\x1b[0m`;
 const yellow = (s) => `\x1b[33m${s}\x1b[0m`;
 const magenta = (s) => `\x1b[35m${s}\x1b[0m`;
-const parseStack = async (err) => {
-	return (await new StackTracey(err).withSourcesAsync()).items.map((entry) => ({
+const parseStack = (err) => {
+	return new StackTracey(err).withSources().items.map((entry) => ({
 		file: entry.file,
 		line: entry.line ?? 0,
 		column: entry.column ?? 0,
@@ -38,9 +38,9 @@ const parseStack = async (err) => {
 const prettyErrorTree = async (err, prefix) => {
 	return (await prettyErrorTreeLines(err, prefix)).join("\n");
 };
-const prettyErrorTreeLines = async (err, prefix) => {
-	const frames = (err.parsedStack ?? await parseStack(err)).filter((f) => !f.file.startsWith("node:"));
-	const headerLines = [`${prefix ?? ""}${gray("[")}${red(err.name)}${gray("]")} ${err.message}`];
+const prettyErrorTreeLines = (err, prefix) => {
+	const frames = (err.parsedStack ?? parseStack(err)).filter((f) => !f.file.startsWith("node:"));
+	const headerLines = [`${prefix ?? ""}${gray("[")}${red(err.name)}${gray("]")} ${err.message.trim()}`];
 	const known = new Set([
 		"name",
 		"message",
@@ -59,14 +59,13 @@ const prettyErrorTreeLines = async (err, prefix) => {
 		hasProps = true;
 	}
 	if (hasProps) {
-		propLines.push(gray("Properties:"));
-		propLines.push(gray(""));
 		const inspectLines = util.inspect(propsObj, {
 			colors: true,
 			depth: null,
 			compact: 10
 		}).split("\n");
-		propLines.push(...inspectLines.map((line) => "  " + line));
+		propLines.push(gray("Properties: ") + inspectLines[0]);
+		propLines.push(...inspectLines.slice(1));
 	}
 	const loc = (item) => `${shortPath(item.file)}:${item.line}:${item.column}`;
 	const width = Math.max(...frames.map((f) => loc(f).length), 0);
@@ -99,7 +98,7 @@ const prettyErrorTreeLines = async (err, prefix) => {
 	if (err instanceof AggregateError && Array.isArray(err.errors)) for (let i = 0; i < err.errors.length; i++) {
 		const innerErr = err.errors[i];
 		aggregateLines.push(red("│"));
-		const inner = await prettyErrorTreeLines(innerErr);
+		const inner = prettyErrorTreeLines(innerErr);
 		for (let j = 0; j < inner.length; j++) if (i < err.errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j];
 		else if (i < err.errors.length - 1 && j > 0) inner[j] = red(`│ `) + inner[j];
 		else if (i === err.errors.length - 1 && j === 0) inner[j] = red(`╰─`) + inner[j];
@@ -110,7 +109,7 @@ const prettyErrorTreeLines = async (err, prefix) => {
 	const causeLines = [];
 	if (err.cause instanceof Error) {
 		causeLines.push(magenta("│"));
-		const cause = await prettyErrorTreeLines(err.cause, "Caused by ");
+		const cause = prettyErrorTreeLines(err.cause, "Caused by ");
 		causeLines.push(...cause);
 	}
 	const out = [];
