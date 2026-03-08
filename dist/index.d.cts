@@ -5,10 +5,12 @@ type Frame = {
   line: number;
   column: number;
   sourceLine?: string;
-  dbg: any;
+  callee: string;
 };
-declare const prettyErrorTree: (err: Error & {
+type ErrorExtra = Error & {
   parsedStack?: Frame[];
-}, prefix?: string) => Promise<string>;
+  prefix?: string;
+};
+declare const prettyErrorTree: (err: ErrorExtra) => string;
 //#endregion
-export { installPrettyErrorTree, prettyErrorTree };
+export { Frame, installPrettyErrorTree, prettyErrorTree };

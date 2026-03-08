@@ -4,7 +4,6 @@ Pretty-prints Node.js `Error` objects in a tree style.
 
 - Shows lines of source code
 - Flattens nested causes
-- Filters out internal Node.js frames
 - Shortens file paths
 - Highlights function names
 - Colors the output

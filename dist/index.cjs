@@ -58,22 +58,25 @@ const parseStack = (err) => {
 		line: entry.line ?? 0,
 		column: entry.column ?? 0,
 		sourceLine: entry.sourceLine,
-		dbg: entry
+		callee: entry.callee ?? "<unknown>"
 	}));
 };
-const prettyErrorTree = async (err, prefix) => {
-	return (await prettyErrorTreeLines(err, prefix)).join("\n");
+const prettyErrorTree = (err) => {
+	return prettyErrorTreeLines(err).join("\n");
 };
-const prettyErrorTreeLines = (err, prefix) => {
-	const frames = (err.parsedStack ?? parseStack(err)).filter((f) => !f.file.startsWith("node:"));
-	const headerLines = [`${prefix ?? ""}${gray("[")}${red(err.name)}${gray("]")} ${err.message.trim()}`];
+const prettyErrorTreeLines = (err) => {
+	const frames = err.parsedStack ?? parseStack(err);
+	const headerLines = [`${err.prefix ?? ""}${gray("[")}${red(err.name)}${gray("]")} ${err.message.trim()}`];
 	const known = new Set([
 		"name",
 		"message",
 		"stack",
 		"cause",
 		"errors",
-		"parsedStack"
+		"parsedStack",
+		"prefix",
+		"error",
+		"suppressed"
 	]);
 	const propsObj = {};
 	const errObj = err;
@@ -94,7 +97,8 @@ const prettyErrorTreeLines = (err, prefix) => {
 		propLines.push(...inspectLines.slice(1));
 	}
 	const loc = (item) => `${shortPath(item.file)}:${item.line}:${item.column}`;
-	const width = Math.max(...frames.map((f) => loc(f).length), 0);
+	const locWidth = Math.max(...frames.map((f) => loc(f).length), 0);
+	const calleeWidth = Math.max(...frames.map((f) => f.callee.length), 0);
 	const style = {
 		one: "",
 		top: "",
@@ -108,7 +112,8 @@ const prettyErrorTreeLines = (err, prefix) => {
 	const stackLines = [];
 	for (let i = 0; i < frames.length; i++) {
 		const frame = frames[i];
-		const paddedLoc = `${gray(loc(frame).padEnd(width))}:`;
+		const paddedLoc = `${gray(loc(frame).padEnd(locWidth))}:`;
+		const paddedCallee = `${gray(frame.callee.padEnd(calleeWidth))}`;
 		if (frame.sourceLine) {
 			const line = frame.sourceLine.trim();
 			const col = frame.column - (frame.sourceLine.length - frame.sourceLine.trimStart().length);
@@ -116,26 +121,41 @@ const prettyErrorTreeLines = (err, prefix) => {
 			const word = line.slice(col - 1).match(/^(\w+|\()/)?.[0] ?? "";
 			const after = line.slice(col - 1 + word.length);
 			const lineColored = `${gray(before)}${yellow(word)}${gray(after)}`;
-			stackLines.push(`${paddedLoc} ${lineColored}`);
-		} else stackLines.push(`${paddedLoc} ${gray("// source not available")}`);
+			stackLines.push(`${gray("at")} ${paddedCallee} ${paddedLoc} ${lineColored}`);
+		} else stackLines.push(`${gray("at")} ${paddedCallee} ${paddedLoc} ${gray("// source not available")}`);
 	}
 	bracket(stackLines, style, gray);
-	const aggregateLines = [];
-	if (err instanceof AggregateError && Array.isArray(err.errors)) for (let i = 0; i < err.errors.length; i++) {
-		const innerErr = err.errors[i];
-		aggregateLines.push(red("│"));
-		const inner = prettyErrorTreeLines(innerErr);
-		for (let j = 0; j < inner.length; j++) if (i < err.errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j];
-		else if (i < err.errors.length - 1 && j > 0) inner[j] = red(`│ `) + inner[j];
-		else if (i === err.errors.length - 1 && j === 0) inner[j] = red(`╰─`) + inner[j];
-		else if (i === err.errors.length - 1 && j > 0) inner[j] = red(`  `) + inner[j];
-		else continue;
-		aggregateLines.push(...inner);
+	const printInner = (errors) => {
+		const out = [];
+		for (let i = 0; i < errors.length; i++) {
+			const innerErr = errors[i];
+			out.push(red("│"));
+			const inner = prettyErrorTreeLines(innerErr);
+			for (let j = 0; j < inner.length; j++) if (i < errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j];
+			else if (i < errors.length - 1 && j > 0) inner[j] = red(`│ `) + inner[j];
+			else if (i === errors.length - 1 && j === 0) inner[j] = red(`╰─`) + inner[j];
+			else if (i === errors.length - 1 && j > 0) inner[j] = red(`  `) + inner[j];
+			else continue;
+			out.push(...inner);
+		}
+		return out;
+	};
+	const innerErrorLines = [];
+	if (err instanceof AggregateError && Array.isArray(err.errors)) innerErrorLines.push(...printInner(err.errors));
+	if (err instanceof SuppressedError) {
+		err.error.prefix = "Suppressed by ";
+		err.suppressed.prefix = "Suppressed ";
+		innerErrorLines.push(...printInner([err.error, err.suppressed]));
 	}
 	const causeLines = [];
-	if (err.cause instanceof Error) {
+	if (err.cause) {
 		causeLines.push(magenta("│"));
-		const cause = prettyErrorTreeLines(err.cause, "Caused by ");
+		const cause = (() => {
+			if (err.cause instanceof Error) {
+				err.cause.prefix = "Caused by: ";
+				return prettyErrorTreeLines(err.cause);
+			} else return [`Caused by: ${String(err.cause)}`];
+		})();
 		causeLines.push(...cause);
 	}
 	const out = [];
@@ -144,9 +164,9 @@ const prettyErrorTreeLines = (err, prefix) => {
 	out.push(...propLines);
 	if (stackLines.length > 0) out.push("");
 	out.push(...stackLines);
-	for (let i = 1; i < out.length; i++) if (aggregateLines.length > 0) out[i] = red("│ ") + out[i];
+	for (let i = 1; i < out.length; i++) if (innerErrorLines.length > 0) out[i] = red("│ ") + out[i];
 	else out[i] = "  " + out[i];
-	out.push(...aggregateLines);
+	out.push(...innerErrorLines);
 	for (let i = 1; i < out.length; i++) if (causeLines.length > 0) out[i] = magenta("│ ") + out[i];
 	else out[i] = "  " + out[i];
 	out.push(...causeLines);

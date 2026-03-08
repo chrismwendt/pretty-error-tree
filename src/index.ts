@@ -39,12 +39,12 @@ const magenta = (s: string) => `\x1b[35m${s}\x1b[0m`
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`
 
-type Frame = {
+export type Frame = {
   file: string
   line: number
   column: number
   sourceLine?: string
-  dbg: any
+  callee: string
 }
 
 const parseStack = (err: Error): Frame[] => {
@@ -54,24 +54,26 @@ const parseStack = (err: Error): Frame[] => {
     line: entry.line ?? 0,
     column: entry.column ?? 0,
     sourceLine: entry.sourceLine,
-    dbg: entry,
+    callee: entry.callee ?? '<unknown>',
   }))
 }
 
-export const prettyErrorTree = async (err: Error & { parsedStack?: Frame[] }, prefix?: string): Promise<string> => {
-  const lines = await prettyErrorTreeLines(err, prefix)
+type ErrorExtra = Error & { parsedStack?: Frame[]; prefix?: string }
+
+export const prettyErrorTree = (err: ErrorExtra): string => {
+  const lines = prettyErrorTreeLines(err)
   return lines.join('\n')
 }
 
-const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: string): string[] => {
+const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
   const stack = err.parsedStack ?? parseStack(err)
-  const frames = stack.filter(f => !f.file.startsWith('node:'))
+  const frames = stack
 
   // name and message
-  const headerLines = [`${prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]
+  const headerLines = [`${err.prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]
 
   // props
-  const known = new Set(['name', 'message', 'stack', 'cause', 'errors', 'parsedStack'])
+  const known = new Set(['name', 'message', 'stack', 'cause', 'errors', 'parsedStack', 'prefix', 'error', 'suppressed'])
   const propsObj: Record<string, unknown> = {}
   const errObj = err as Error & Record<string, unknown>
   let hasProps = false
@@ -89,7 +91,8 @@ const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: s
 
   // stack trace
   const loc = (item: Frame) => `${shortPath(item.file)}:${item.line}:${item.column}`
-  const width = Math.max(...frames.map(f => loc(f).length), 0)
+  const locWidth = Math.max(...frames.map(f => loc(f).length), 0)
+  const calleeWidth = Math.max(...frames.map(f => f.callee.length), 0)
   const style: BracketStyle = { one: '', top: '', mid: '', bot: '' }
   style.top = '╭─▶ '
   style.mid = '├── '
@@ -98,7 +101,8 @@ const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: s
   const stackLines: string[] = []
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i]
-    const paddedLoc = `${gray(loc(frame).padEnd(width))}:`
+    const paddedLoc = `${gray(loc(frame).padEnd(locWidth))}:`
+    const paddedCallee = `${gray(frame.callee.padEnd(calleeWidth))}`
     if (frame.sourceLine) {
       const line = frame.sourceLine.trim()
       const col = frame.column - (frame.sourceLine.length - frame.sourceLine.trimStart().length)
@@ -106,37 +110,58 @@ const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: s
       const word = line.slice(col - 1).match(/^(\w+|\()/)?.[0] ?? ''
       const after = line.slice(col - 1 + word.length)
       const lineColored = `${gray(before)}${yellow(word)}${gray(after)}`
-      stackLines.push(`${paddedLoc} ${lineColored}`)
+      stackLines.push(`${gray('at')} ${paddedCallee} ${paddedLoc} ${lineColored}`)
     } else {
-      stackLines.push(`${paddedLoc} ${gray('// source not available')}`)
+      stackLines.push(`${gray('at')} ${paddedCallee} ${paddedLoc} ${gray('// source not available')}`)
     }
   }
   bracket(stackLines, style, gray)
 
-  // AggregateError
-  const aggregateLines: string[] = []
-  if (err instanceof AggregateError && Array.isArray(err.errors)) {
-    for (let i = 0; i < err.errors.length; i++) {
-      const innerErr = err.errors[i]
-      aggregateLines.push(red('│'))
+  const printInner = (errors: Error[]): string[] => {
+    const out: string[] = []
+    for (let i = 0; i < errors.length; i++) {
+      const innerErr = errors[i]
+      out.push(red('│'))
       const inner = prettyErrorTreeLines(innerErr)
       for (let j = 0; j < inner.length; j++) {
         if (false) continue
-        else if (i < err.errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j]
-        else if (i < err.errors.length - 1 && j > 0) inner[j] = red(`│ `) + inner[j]
-        else if (i === err.errors.length - 1 && j === 0) inner[j] = red(`╰─`) + inner[j]
-        else if (i === err.errors.length - 1 && j > 0) inner[j] = red(`  `) + inner[j]
+        else if (i < errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j]
+        else if (i < errors.length - 1 && j > 0) inner[j] = red(`│ `) + inner[j]
+        else if (i === errors.length - 1 && j === 0) inner[j] = red(`╰─`) + inner[j]
+        else if (i === errors.length - 1 && j > 0) inner[j] = red(`  `) + inner[j]
         else continue
       }
-      aggregateLines.push(...inner)
+      out.push(...inner)
     }
+    return out
+  }
+
+  const innerErrorLines: string[] = []
+
+  // AggregateError
+  if (err instanceof AggregateError && Array.isArray(err.errors)) {
+    innerErrorLines.push(...printInner(err.errors))
+  }
+
+  // SuppressedError
+  if (err instanceof SuppressedError) {
+    ;(err.error as ErrorExtra).prefix = 'Suppressed by '
+    ;(err.suppressed as ErrorExtra).prefix = 'Suppressed '
+    innerErrorLines.push(...printInner([err.error, err.suppressed]))
   }
 
   // cause
   const causeLines: string[] = []
-  if (err.cause instanceof Error) {
+  if (err.cause) {
     causeLines.push(magenta('│'))
-    const cause = prettyErrorTreeLines(err.cause, 'Caused by ')
+    const cause: string[] = (() => {
+      if (err.cause instanceof Error) {
+        ;(err.cause as ErrorExtra).prefix = 'Caused by: '
+        return prettyErrorTreeLines(err.cause)
+      } else {
+        return [`Caused by: ${String(err.cause)}`]
+      }
+    })()
     causeLines.push(...cause)
   }
 
@@ -147,10 +172,10 @@ const prettyErrorTreeLines = (err: Error & { parsedStack?: Frame[] }, prefix?: s
   if (stackLines.length > 0) out.push('')
   out.push(...stackLines)
   for (let i = 1; i < out.length; i++) {
-    if (aggregateLines.length > 0) out[i] = red('│ ') + out[i]
+    if (innerErrorLines.length > 0) out[i] = red('│ ') + out[i]
     else out[i] = '  ' + out[i]
   }
-  out.push(...aggregateLines)
+  out.push(...innerErrorLines)
   for (let i = 1; i < out.length; i++) {
     if (causeLines.length > 0) out[i] = magenta('│ ') + out[i]
     else out[i] = '  ' + out[i]

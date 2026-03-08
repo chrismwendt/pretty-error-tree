@@ -19,7 +19,8 @@
     "src"
   ],
   "scripts": {
-    "build": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsdown"
+    "build": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsdown",
+    "test": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsx test/test.test.ts"
   },
   "packageManager": "yarn@4.13.0",
   "devDependencies": {
