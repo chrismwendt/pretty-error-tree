@@ -1,26 +1,39 @@
 {
-  "name": "tsdown-starter",
+  "name": "pretty-error-tree",
   "type": "module",
   "version": "0.0.0",
   "private": true,
-  "description": "A simple example library built by tsdown",
+  "description": "A TypeScript utility library for rendering errors readable tree-style terminal output.",
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
     "./package.json": "./package.json"
   },
-  "main": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.cts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch"
+    "build": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsdown"
   },
   "packageManager": "yarn@4.13.0",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.3.5",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
     "tsdown": "^0.21.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "stacktracey": "^2.1.8"
   }
 }
