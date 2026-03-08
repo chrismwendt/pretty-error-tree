@@ -18,7 +18,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch"
   },
-  "packageManager": "yarn@4.10.3",
+  "packageManager": "yarn@4.13.0",
   "devDependencies": {
     "tsdown": "^0.21.0",
     "typescript": "^5.9.3"
