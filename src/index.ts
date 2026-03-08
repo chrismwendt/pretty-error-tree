@@ -82,7 +82,10 @@ const prettyErrorTreeLines = async (err: Error & { parsedStack?: Frame[] }, pref
     hasProps = true
   }
   if (hasProps) {
-    propLines.push(`${gray('Properties:')} ${util.inspect(propsObj, { colors: true, depth: null, compact: true })}`)
+    propLines.push(gray('Properties:'))
+    propLines.push(gray(''))
+    const inspectLines = util.inspect(propsObj, { colors: true, depth: null, compact: 10 }).split('\n')
+    propLines.push(...inspectLines.map(line => '  ' + line))
   }
 
   // stack trace

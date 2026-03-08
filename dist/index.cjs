@@ -84,11 +84,16 @@ const prettyErrorTreeLines = async (err, prefix) => {
 		propsObj[key] = errObj[key];
 		hasProps = true;
 	}
-	if (hasProps) propLines.push(`${gray("Properties:")} ${util.default.inspect(propsObj, {
-		colors: true,
-		depth: null,
-		compact: true
-	})}`);
+	if (hasProps) {
+		propLines.push(gray("Properties:"));
+		propLines.push(gray(""));
+		const inspectLines = util.default.inspect(propsObj, {
+			colors: true,
+			depth: null,
+			compact: 10
+		}).split("\n");
+		propLines.push(...inspectLines.map((line) => "  " + line));
+	}
 	const loc = (item) => `${shortPath(item.file)}:${item.line}:${item.column}`;
 	const width = Math.max(...frames.map((f) => loc(f).length), 0);
 	const style = {
