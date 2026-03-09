@@ -19,8 +19,9 @@
     "src"
   ],
   "scripts": {
-    "build": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsdown",
-    "test": "yarn run prettier --check . && yarn run tsc --noEmit && yarn run eslint . && yarn run tsx test/test.test.ts"
+    "build": "bash script.sh build",
+    "test": "bash script.sh test",
+    "testlite": "bash script.sh testlite"
   },
   "packageManager": "yarn@4.13.0",
   "devDependencies": {
@@ -35,6 +36,11 @@
     "typescript-eslint": "^8.56.1"
   },
   "dependencies": {
-    "stacktracey": "^2.1.8"
+    "get-source": "^2.0.12"
+  },
+  "inlinedDependencies": {
+    "source-map": "0.6.1",
+    "get-source": "2.0.12",
+    "data-uri-to-buffer": "2.0.2"
   }
 }

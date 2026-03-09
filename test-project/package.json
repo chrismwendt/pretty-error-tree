@@ -1,0 +1,19 @@
+{
+  "name": "test-project",
+  "packageManager": "yarn@4.13.0",
+  "scripts": {
+    "test": "yarn run tsx main.ts && yarn run tsc --noEmit main.ts && yarn run eslint . && yarn run prettier --check ."
+  },
+  "dependencies": {
+    "pretty-error-tree": "file:../artifacts/pretty-error-tree.tgz",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  }
+}

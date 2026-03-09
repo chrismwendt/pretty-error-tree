@@ -1,11 +1,11 @@
 import * as path from 'path'
-import StackTracey from 'stacktracey'
 import util from 'util'
 import { fileURLToPath } from 'url'
+import getSource from 'get-source'
 
 export const installPrettyErrorTree = () => {
-  const h = async (err: any) => {
-    console.error(await prettyErrorTree(err))
+  const h = (err: any) => {
+    console.error(prettyErrorTree(err))
     process.exit(1)
   }
 
@@ -47,16 +47,21 @@ export type Frame = {
   callee: string
 }
 
-const parseStack = (err: Error): Frame[] => {
-  const stack = new StackTracey(err).withSources()
-  return stack.items.map(entry => ({
-    file: entry.file,
-    line: entry.line ?? 0,
-    column: entry.column ?? 0,
-    sourceLine: entry.sourceLine,
-    callee: entry.callee ?? '<unknown>',
-  }))
-}
+export const parseStack = (stack: string): Frame[] =>
+  stack.split('\n').flatMap((stackLine: string): Frame[] => {
+    const match1 = stackLine.match(/^\s*at\s+(.+?)\s+\(([^\s]+):(\d+):(\d+)\)$/)
+    const match2 = stackLine.match(/^\s*at\s+(.+?)\s+([^\s]+):(\d+):(\d+)$/)
+    const match = match1 ?? match2
+    if (match) {
+      const [, callee, file, lineStr, columnStr] = match
+      const line: number = parseInt(lineStr, 10)
+      const column = parseInt(columnStr, 10)
+      const sourceLine = getSource(file)?.lines[line - 1] ?? null
+      return [{ file, line, column, sourceLine, callee }]
+    } else {
+      return []
+    }
+  })
 
 type ErrorExtra = Error & { parsedStack?: Frame[]; prefix?: string }
 
@@ -66,7 +71,7 @@ export const prettyErrorTree = (err: ErrorExtra): string => {
 }
 
 const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
-  const stack = err.parsedStack ?? parseStack(err)
+  const stack = err.parsedStack ?? (err.stack ? parseStack(err.stack) : [])
   const frames = stack
 
   // name and message

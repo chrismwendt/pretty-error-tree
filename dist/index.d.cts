@@ -7,10 +7,11 @@ type Frame = {
   sourceLine?: string;
   callee: string;
 };
+declare const parseStack: (stack: string) => Frame[];
 type ErrorExtra = Error & {
   parsedStack?: Frame[];
   prefix?: string;
 };
 declare const prettyErrorTree: (err: ErrorExtra) => string;
 //#endregion
-export { Frame, installPrettyErrorTree, prettyErrorTree };
+export { Frame, installPrettyErrorTree, parseStack, prettyErrorTree };
