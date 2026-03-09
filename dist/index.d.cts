@@ -14,4 +14,4 @@ type ErrorExtra = Error & {
 };
 declare const prettyErrorTree: (err: ErrorExtra) => string;
 //#endregion
-export { Frame, installPrettyErrorTree, parseStack, prettyErrorTree };
+export { ErrorExtra, Frame, installPrettyErrorTree, parseStack, prettyErrorTree };

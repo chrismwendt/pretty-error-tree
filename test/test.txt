@@ -1,0 +1,2 @@
+// Stable file:line:col for testing reading source files
+const x = await foo()

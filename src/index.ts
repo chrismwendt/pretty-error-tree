@@ -2,6 +2,7 @@ import * as path from 'path'
 import util from 'util'
 import { fileURLToPath } from 'url'
 import getSource from 'get-source'
+import fs from 'fs'
 
 export const installPrettyErrorTree = () => {
   const h = (err: any) => {
@@ -11,11 +12,6 @@ export const installPrettyErrorTree = () => {
 
   process.on('uncaughtException', h)
   process.on('unhandledRejection', h)
-}
-
-function shortPath(file: string) {
-  file = file.startsWith('file://') ? fileURLToPath(file) : file
-  return path.relative(process.cwd(), file)
 }
 
 type BracketStyle = { one: string; top: string; mid: string; bot: string }
@@ -47,23 +43,43 @@ export type Frame = {
   callee: string
 }
 
-export const parseStack = (stack: string): Frame[] =>
-  stack.split('\n').flatMap((stackLine: string): Frame[] => {
+export const parseStack = (stack: string): Frame[] => {
+  const fileCache = new Map<string, string[]>()
+
+  function getSourceLine(file: string, line: number): string | undefined {
+    let lines = fileCache.get(file)
+
+    if (!lines) {
+      try {
+        lines = fs.readFileSync(file, 'utf8').split('\n')
+      } catch {
+        lines = []
+      }
+      fileCache.set(file, lines)
+    }
+
+    return lines[line - 1]
+  }
+
+  return stack.split('\n').flatMap((stackLine): Frame[] => {
     const match1 = stackLine.match(/^\s*at\s+(.+?)\s+\(([^\s]+):(\d+):(\d+)\)$/)
     const match2 = stackLine.match(/^\s*at\s+(.+?)\s+([^\s]+):(\d+):(\d+)$/)
     const match = match1 ?? match2
-    if (match) {
-      const [, callee, file, lineStr, columnStr] = match
-      const line: number = parseInt(lineStr, 10)
-      const column = parseInt(columnStr, 10)
-      const sourceLine = getSource(file)?.lines[line - 1] ?? null
-      return [{ file, line, column, sourceLine, callee }]
-    } else {
-      return []
-    }
-  })
+    if (!match) return []
 
-type ErrorExtra = Error & { parsedStack?: Frame[]; prefix?: string }
+    const [, callee, fileMaybeUrl, lineStr, columnStr] = match
+    const line = parseInt(lineStr, 10)
+    const column = parseInt(columnStr, 10)
+
+    const file = fileMaybeUrl.startsWith('file://') ? fileURLToPath(fileMaybeUrl) : fileMaybeUrl
+
+    const sourceLine = getSourceLine(file, line)
+
+    return [{ file, line, column, sourceLine, callee }]
+  })
+}
+
+export type ErrorExtra = Error & { parsedStack?: Frame[]; prefix?: string }
 
 export const prettyErrorTree = (err: ErrorExtra): string => {
   const lines = prettyErrorTreeLines(err)
@@ -95,7 +111,7 @@ const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
   }
 
   // stack trace
-  const loc = (item: Frame) => `${shortPath(item.file)}:${item.line}:${item.column}`
+  const loc = (item: Frame) => `${path.relative(process.cwd(), item.file)}:${item.line}:${item.column}`
   const locWidth = Math.max(...frames.map(f => loc(f).length), 0)
   const calleeWidth = Math.max(...frames.map(f => f.callee.length), 0)
   const style: BracketStyle = { one: '', top: '', mid: '', bot: '' }
