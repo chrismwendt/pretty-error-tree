@@ -86,14 +86,14 @@ export const prettyErrorTree = (err: ErrorExtra): string => {
   return lines.join('\n')
 }
 
-const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
+const prettyErrorTreeLines = (err: ErrorExtra, prefix?: string): string[] => {
   if (!err || typeof err !== 'object') return [`${String(err)}`]
 
   const stack = err.parsedStack ?? (err.stack ? parseStack(err.stack) : [])
   const frames = stack
 
   // name and message
-  const headerLines = [`${err.prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]
+  const headerLines = [`${prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]
 
   // props
   const known = new Set(['name', 'message', 'stack', 'cause', 'errors', 'parsedStack', 'prefix', 'error', 'suppressed'])
@@ -140,12 +140,12 @@ const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
   }
   bracket(stackLines, style, gray)
 
-  const printInner = (errors: Error[]): string[] => {
+  const printInner = (errors: Array<{ error: Error; prefix?: string }>): string[] => {
     const out: string[] = []
     for (let i = 0; i < errors.length; i++) {
       const innerErr = errors[i]
       out.push(red('│'))
-      const inner = prettyErrorTreeLines(innerErr)
+      const inner = prettyErrorTreeLines(innerErr.error, innerErr.prefix)
       for (let j = 0; j < inner.length; j++) {
         if (false) continue
         else if (i < errors.length - 1 && j === 0) inner[j] = red(`├─`) + inner[j]
@@ -163,14 +163,17 @@ const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
 
   // AggregateError
   if (err instanceof AggregateError && Array.isArray(err.errors)) {
-    innerErrorLines.push(...printInner(err.errors))
+    innerErrorLines.push(...printInner(err.errors.map(error => ({ error }))))
   }
 
   // SuppressedError
   if (err instanceof SuppressedError) {
-    ;(err.error as ErrorExtra).prefix = 'Suppressed by '
-    ;(err.suppressed as ErrorExtra).prefix = 'Suppressed '
-    innerErrorLines.push(...printInner([err.error, err.suppressed]))
+    innerErrorLines.push(
+      ...printInner([
+        { error: err.error, prefix: 'Suppressed by ' },
+        { error: err.suppressed, prefix: 'Suppressed ' },
+      ])
+    )
   }
 
   // cause
@@ -179,8 +182,7 @@ const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
     causeLines.push(magenta('│'))
     const cause: string[] = (() => {
       if (err.cause instanceof Error) {
-        ;(err.cause as ErrorExtra).prefix = 'Caused by: '
-        return prettyErrorTreeLines(err.cause)
+        return prettyErrorTreeLines(err.cause, 'Caused by: ')
       } else {
         return [`Caused by: ${String(err.cause)}`]
       }
