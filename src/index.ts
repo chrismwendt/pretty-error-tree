@@ -87,6 +87,8 @@ export const prettyErrorTree = (err: ErrorExtra): string => {
 }
 
 const prettyErrorTreeLines = (err: ErrorExtra): string[] => {
+  if (!err || typeof err !== 'object') return [`${String(err)}`]
+
   const stack = err.parsedStack ?? (err.stack ? parseStack(err.stack) : [])
   const frames = stack
 
