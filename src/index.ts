@@ -82,15 +82,14 @@ export const parseStack = (stack: string): Frame[] => {
 export type ErrorExtra = Error & { parsedStack?: Frame[]; prefix?: string }
 
 export const prettyErrorTree = (err: ErrorExtra): string => {
-  const lines = prettyErrorTreeLines(err)
-  return lines.join('\n')
+  return prettyErrorTreeLines(err).join('\n')
 }
 
 const prettyErrorTreeLines = (err: ErrorExtra, prefix?: string): string[] => {
   if (!err || typeof err !== 'object') return [`${String(err)}`]
 
   const stack = err.parsedStack ?? (err.stack ? parseStack(err.stack) : [])
-  const frames = stack
+  const frames = stack.filter(frame => !frame.file.startsWith('node:'))
 
   // name and message
   const headerLines = [`${prefix ?? ''}${gray('[')}${red(err.name)}${gray(']')} ${err.message.trim()}`]

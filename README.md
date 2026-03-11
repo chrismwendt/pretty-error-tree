@@ -7,6 +7,7 @@ Pretty-prints Node.js `Error` objects in a tree style.
 - Shortens file paths
 - Highlights function names
 - Colors the output
+- Filters out internal Node.js frames
 
 ![pretty-error-tree output](./img-pretty-error-tree.png)
 
