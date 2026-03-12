@@ -11,8 +11,8 @@
   "files.exclude": {
     "dist": true
   },
-  "typescript.tsdk": ".yarn/sdks/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "js/ts.tsdk.path": ".yarn/sdks/typescript/lib",
+  "js/ts.tsdk.promptToUseWorkspaceVersion": true,
   "prettier.prettierPath": ".yarn/sdks/prettier/index.cjs",
   "editor.formatOnSave": true,
   "eslint.nodePath": ".yarn/sdks",
